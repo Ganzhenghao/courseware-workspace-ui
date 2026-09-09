@@ -1,7 +1,7 @@
 <template>
   <el-form ref="loginFormRef" :model="loginForm" :rules="loginRules" size="large">
     <el-form-item prop="username">
-      <el-input v-model="loginForm.username" placeholder="用户名： admin">
+      <el-input v-model="loginForm.username" placeholder="账号">
         <template #prefix>
           <el-icon class="el-input__icon">
             <user />
@@ -13,7 +13,7 @@
       <el-input
         v-model="loginForm.password"
         type="password"
-        placeholder="密码： sz123456"
+        placeholder="密码"
         show-password
         autocomplete="new-password"
       >
@@ -51,6 +51,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { ElNotification } from 'element-plus';
 import SliderCaptcha from '@/components/Captcha/SliderCaptcha.vue';
 import { getCaptchaStatus } from '@/api/modules/system/captcha';
+import { getLoginDefaults } from '@/api/modules/system/config';
 const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
@@ -156,7 +157,23 @@ const onCaptchaClose = () => {
   resetForm();
 };
 
+const loadLoginDefaults = async () => {
+  try {
+    const { data } = await getLoginDefaults();
+    if (!data.enabled) return;
+    if (!loginForm.username && data.username) {
+      loginForm.username = data.username;
+    }
+    if (!loginForm.password && data.password) {
+      loginForm.password = data.password;
+    }
+  } catch {
+    // 默认值加载失败时保持空表单，不影响手工登录。
+  }
+};
+
 onMounted(() => {
+  void loadLoginDefaults();
   document.onkeydown = (e: KeyboardEvent) => {
     e = (window.event as KeyboardEvent) || e;
     if (e.code === 'Enter' || e.code === 'enter' || e.code === 'NumpadEnter') {

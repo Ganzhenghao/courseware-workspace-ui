@@ -24,4 +24,11 @@ export type ConfigInfo = {
   updateId: number;
   updateTime: string;
   isLock?: string;
+  frontendVisible?: string;
+};
+
+export type LoginDefaultConfig = {
+  enabled: boolean;
+  username: string;
+  password: string;
 };

@@ -1,5 +1,5 @@
 ﻿import { adminHttp } from '@/api/client';
-import type { ConfigForm, ConfigInfo, ConfigQuery } from '@/api/types/system/config';
+import type { ConfigForm, ConfigInfo, ConfigQuery, LoginDefaultConfig } from '@/api/types/system/config';
 import type { IPage } from '@/api/types';
 
 /**
@@ -44,4 +44,11 @@ export const deleteConfig = (params: { ids: number[] }) => {
  */
 export const getFrontendConfig = () => {
   return adminHttp.get<Record<string, string>>(`/sys-config/frontend-configs`, {});
+};
+
+/**
+ * 获取登录页默认账号密码
+ */
+export const getLoginDefaults = () => {
+  return adminHttp.get<LoginDefaultConfig>(`/sys-config/login-defaults`, {});
 };

@@ -28,12 +28,24 @@
         <el-input v-model="paramsProps.row.configValue" placeholder="请填写Value" clearable />
       </el-form-item>
       <el-form-item label="是否前端加载" prop="frontendVisible">
-        <el-select v-model="paramsProps.row.frontendVisible" clearable placeholder="请选择业务字典类型">
+        <el-select
+          v-model="paramsProps.row.frontendVisible"
+          :disabled="paramsProps.row.isLock === 'T'"
+          clearable
+          placeholder="请选择业务字典类型"
+        >
           <el-option v-for="item in yesNoOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
       <el-form-item label="备注" prop="remark">
-        <el-input v-model="paramsProps.row.remark" placeholder="请填写备注" :rows="6" type="textarea" clearable />
+        <el-input
+          v-model="paramsProps.row.remark"
+          :disabled="paramsProps.row.isLock === 'T'"
+          placeholder="请填写备注"
+          :rows="6"
+          type="textarea"
+          clearable
+        />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -56,7 +68,23 @@ defineOptions({
 const rules = reactive({
   configName: [{ required: true, message: '请填写参数类型' }],
   configKey: [{ required: true, message: '请填写Key' }],
-  configValue: [{ required: true, message: '请填写Value' }],
+  configValue: [
+    {
+      validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+        const key = paramsProps.value.row.configKey;
+        if (value === '' && (key === 'sys.login.autoFillUsername' || key === 'sys.login.autoFillPassword')) {
+          callback();
+          return;
+        }
+        if (!value) {
+          callback(new Error('请填写Value'));
+          return;
+        }
+        callback();
+      },
+      trigger: 'blur'
+    }
+  ],
   frontendVisible: [{ required: true, message: '请选择业务字典类型' }]
 });
 
