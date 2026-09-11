@@ -6,6 +6,7 @@ import { defineModule } from '@/core';
 export const materialModule = defineModule({
   name: 'material',
   components: {
-    '/material/materialCategory/index': () => import('./views/materialCategory/index.vue')
+    '/material/materialCategory/index': () => import('./views/materialCategory/index.vue'),
+    '/material/materialTag/index': () => import('./views/materialTag/index.vue')
   }
 });
