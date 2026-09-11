@@ -33,6 +33,7 @@
     <span>如无法登陆请联系作者：feiyuchuixue@163.com</span>
   </div>
   <SliderCaptcha ref="captchaRef" @success="onSliderSuccess" @close="onCaptchaClose" />
+  <LoginLoadingOverlay :visible="loginLoadingVisible" :message="loginLoadingMessage" />
 </template>
 
 <script setup lang="ts">
@@ -48,8 +49,9 @@ import { CircleClose, Lock, User, UserFilled } from '@element-plus/icons-vue';
 import { initDynamicRouter } from '@/router/modules/dynamicRouter';
 
 import { onMounted, reactive, ref } from 'vue';
-import { ElLoading, ElNotification } from 'element-plus';
+import { ElNotification } from 'element-plus';
 import SliderCaptcha from '@/components/Captcha/SliderCaptcha.vue';
+import LoginLoadingOverlay from '@/views/login/components/LoginLoadingOverlay.vue';
 import { getCaptchaStatus } from '@/api/modules/system/captcha';
 import { getLoginDefaults } from '@/api/modules/system/config';
 const router = useRouter();
@@ -65,7 +67,8 @@ const loginRules = reactive({
 });
 
 const loading = ref(false);
-let loginLoadingInstance: ReturnType<typeof ElLoading.service> | null = null;
+const loginLoadingVisible = ref(false);
+const loginLoadingMessage = ref('正在验证登录信息…');
 const loginForm = reactive({
   username: '',
   password: ''
@@ -79,12 +82,8 @@ const onSliderSuccess = async () => {
 
 const performLogin = async (formData = loginForm) => {
   loading.value = true;
-  loginLoadingInstance = ElLoading.service({
-    fullscreen: true,
-    lock: true,
-    text: '登录中...',
-    background: 'rgba(0, 0, 0, 0.7)'
-  });
+  loginLoadingMessage.value = '正在验证登录信息…';
+  loginLoadingVisible.value = true;
   try {
     // 通过 AuthAdapter 获取 token（默认使用 LocalAuthAdapter：challenge + AES + loginApi）
     const accessToken = await getAuthAdapter().login({
@@ -95,11 +94,13 @@ const performLogin = async (formData = loginForm) => {
     userStore.setToken(accessToken);
     resetAuthExpiredHandling();
 
+    loginLoadingMessage.value = '正在加载权限与菜单…';
     await initDynamicRouter();
 
     tabsStore.closeMultipleTab();
     keepAliveStore.setKeepAliveName([]);
 
+    loginLoadingMessage.value = '正在进入工作台…';
     await router.push(resolveLoginRedirect());
     ElNotification({
       title: getTimeState(),
@@ -116,8 +117,7 @@ const performLogin = async (formData = loginForm) => {
     });
   } finally {
     loading.value = false;
-    loginLoadingInstance?.close();
-    loginLoadingInstance = null;
+    loginLoadingVisible.value = false;
   }
 };
 
