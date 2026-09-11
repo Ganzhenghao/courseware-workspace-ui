@@ -17,10 +17,21 @@
         </el-checkbox-group>
       </el-form-item>
 
-      <el-form-item label="大小上限" prop="maxSizeMiB">
-        <el-input-number v-model="form.maxSizeMiB" :min="0.01" :max="10" :precision="2" :step="0.5" controls-position="right" />
-        <span class="field-suffix">MiB</span>
-        <span class="field-tip">不能超过系统 multipart 的 10 MiB 限制</span>
+      <el-form-item label="大小上限" prop="maxSizeValue">
+        <div class="size-input">
+          <el-input-number
+            v-model="form.maxSizeValue"
+            :min="sizeMinValue"
+            :max="sizeMaxValue"
+            :precision="sizePrecision"
+            :step="sizeStep"
+            controls-position="right"
+          />
+          <el-select v-model="selectedSizeUnit" class="size-unit" aria-label="文件大小单位">
+            <el-option v-for="unit in sizeUnits" :key="unit" :label="unit" :value="unit" />
+          </el-select>
+        </div>
+        <span class="field-tip">单位可选 KB、MB、GB，最终按字节保存；不能超过系统 multipart 的 10 MiB 限制</span>
       </el-form-item>
 
       <template v-if="form.code === 'IMAGE'">
@@ -86,10 +97,13 @@ import type {
   MaterialCategoryUpdate
 } from '@/modules/material/types/materialCategory';
 
+type SizeUnit = 'KB' | 'MB' | 'GB';
+
 type EditFormModel = {
   code: MaterialCategoryCode;
   allowedExts: string[];
-  maxSizeMiB: number;
+  maxSizeValue: number;
+  maxSizeUnit: SizeUnit;
   imageDimensionMode: ImageDimensionMode | null;
   imageWidth: number | null;
   imageHeight: number | null;
@@ -99,7 +113,13 @@ type EditFormModel = {
   remark: string;
 };
 
-const MEBIBYTE = 1024 * 1024;
+const KIBIBYTE = 1024;
+const MEBIBYTE = KIBIBYTE * 1024;
+const GIBIBYTE = MEBIBYTE * 1024;
+const MAX_SIZE_BYTES = 10 * MEBIBYTE;
+const sizeUnits: SizeUnit[] = ['KB', 'MB', 'GB'];
+const SIZE_UNIT_BYTES: Record<SizeUnit, number> = { KB: KIBIBYTE, MB: MEBIBYTE, GB: GIBIBYTE };
+
 const visible = ref(false);
 const submitting = ref(false);
 const category = ref<MaterialCategory>();
@@ -110,7 +130,8 @@ const emit = defineEmits<{ saved: [] }>();
 const form = reactive<EditFormModel>({
   code: 'IMAGE',
   allowedExts: [],
-  maxSizeMiB: 1,
+  maxSizeValue: 1,
+  maxSizeUnit: 'MB',
   imageDimensionMode: 'NONE',
   imageWidth: null,
   imageHeight: null,
@@ -122,20 +143,47 @@ const form = reactive<EditFormModel>({
 
 const rules: FormRules<EditFormModel> = {
   allowedExts: [{ type: 'array', required: true, min: 1, message: '至少选择一种允许格式', trigger: 'change' }],
-  maxSizeMiB: [{ required: true, message: '请填写文件大小上限', trigger: 'blur' }],
+  maxSizeValue: [{ required: true, message: '请填写文件大小上限', trigger: 'blur' }],
   imageDimensionMode: [{ required: true, message: '请选择图片尺寸规则', trigger: 'change' }],
   maxDurationSeconds: [{ required: true, message: '请填写最大时长', trigger: 'blur' }],
   sort: [{ required: true, message: '请填写排序值', trigger: 'blur' }]
 };
 
 const isMedia = computed(() => form.code === 'VIDEO' || form.code === 'AUDIO');
+const sizePrecision = computed(() => (form.maxSizeUnit === 'GB' ? 6 : 2));
+const sizeStep = computed(() => (form.maxSizeUnit === 'KB' ? 1 : form.maxSizeUnit === 'MB' ? 0.1 : 0.001));
+const sizeMinValue = computed(() => (form.maxSizeUnit === 'GB' ? 0.000001 : 0.01));
+const sizeMaxValue = computed(() => {
+  const factor = 10 ** sizePrecision.value;
+  return Math.floor((MAX_SIZE_BYTES / SIZE_UNIT_BYTES[form.maxSizeUnit]) * factor) / factor;
+});
+
+const selectedSizeUnit = computed<SizeUnit>({
+  get: () => form.maxSizeUnit,
+  set: unit => {
+    if (unit === form.maxSizeUnit) return;
+    const bytes = form.maxSizeValue * SIZE_UNIT_BYTES[form.maxSizeUnit];
+    form.maxSizeUnit = unit;
+    const factor = 10 ** (unit === 'GB' ? 6 : 2);
+    const convertedValue = Math.floor((bytes / SIZE_UNIT_BYTES[unit]) * factor) / factor;
+    form.maxSizeValue = Math.max(unit === 'GB' ? 0.000001 : 0.01, convertedValue);
+  }
+});
+
+const getSizeInput = (bytes: number): { value: number; unit: SizeUnit } => {
+  const unit: SizeUnit = bytes >= GIBIBYTE ? 'GB' : bytes >= MEBIBYTE ? 'MB' : 'KB';
+  const precision = unit === 'GB' ? 6 : 2;
+  return { value: Number((bytes / SIZE_UNIT_BYTES[unit]).toFixed(precision)), unit };
+};
 
 const open = async (row: MaterialCategory) => {
   category.value = row;
+  const sizeInput = getSizeInput(row.maxSizeBytes);
   Object.assign(form, {
     code: row.code,
     allowedExts: [...row.allowedExts],
-    maxSizeMiB: Number((row.maxSizeBytes / MEBIBYTE).toFixed(2)),
+    maxSizeValue: sizeInput.value,
+    maxSizeUnit: sizeInput.unit,
     imageDimensionMode: row.code === 'IMAGE' ? row.imageDimensionMode || 'NONE' : null,
     imageWidth: row.imageWidth,
     imageHeight: row.imageHeight,
@@ -150,7 +198,8 @@ const open = async (row: MaterialCategory) => {
 };
 
 const validateConditionalFields = () => {
-  if (form.maxSizeMiB <= 0 || form.maxSizeMiB > 10) {
+  const maxSizeBytes = Math.round(form.maxSizeValue * SIZE_UNIT_BYTES[form.maxSizeUnit]);
+  if (maxSizeBytes <= 0 || maxSizeBytes > MAX_SIZE_BYTES) {
     ElMessage.warning('文件大小上限必须大于 0 且不能超过 10 MiB');
     return false;
   }
@@ -173,7 +222,7 @@ const handleSubmit = async () => {
   const params: MaterialCategoryUpdate = {
     code: form.code,
     allowedExts: [...form.allowedExts],
-    maxSizeBytes: Math.round(form.maxSizeMiB * MEBIBYTE),
+    maxSizeBytes: Math.round(form.maxSizeValue * SIZE_UNIT_BYTES[form.maxSizeUnit]),
     imageDimensionMode: isImage ? form.imageDimensionMode : null,
     imageWidth: isImage && form.imageDimensionMode === 'FIXED' ? form.imageWidth : null,
     imageHeight: isImage && form.imageDimensionMode === 'FIXED' ? form.imageHeight : null,
@@ -238,6 +287,15 @@ defineExpose({ open });
 .field-suffix {
   margin-left: 8px;
   color: var(--el-text-color-regular);
+}
+
+.size-input {
+  display: flex;
+  gap: 8px;
+}
+
+.size-unit {
+  width: 92px;
 }
 
 .dimension-inputs {
