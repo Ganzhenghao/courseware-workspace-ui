@@ -48,7 +48,7 @@ import { CircleClose, Lock, User, UserFilled } from '@element-plus/icons-vue';
 import { initDynamicRouter } from '@/router/modules/dynamicRouter';
 
 import { onMounted, reactive, ref } from 'vue';
-import { ElNotification } from 'element-plus';
+import { ElLoading, ElNotification } from 'element-plus';
 import SliderCaptcha from '@/components/Captcha/SliderCaptcha.vue';
 import { getCaptchaStatus } from '@/api/modules/system/captcha';
 import { getLoginDefaults } from '@/api/modules/system/config';
@@ -65,6 +65,7 @@ const loginRules = reactive({
 });
 
 const loading = ref(false);
+let loginLoadingInstance: ReturnType<typeof ElLoading.service> | null = null;
 const loginForm = reactive({
   username: '',
   password: ''
@@ -78,6 +79,12 @@ const onSliderSuccess = async () => {
 
 const performLogin = async (formData = loginForm) => {
   loading.value = true;
+  loginLoadingInstance = ElLoading.service({
+    fullscreen: true,
+    lock: true,
+    text: '登录中...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  });
   try {
     // 通过 AuthAdapter 获取 token（默认使用 LocalAuthAdapter：challenge + AES + loginApi）
     const accessToken = await getAuthAdapter().login({
@@ -93,7 +100,7 @@ const performLogin = async (formData = loginForm) => {
     tabsStore.closeMultipleTab();
     keepAliveStore.setKeepAliveName([]);
 
-    router.push(resolveLoginRedirect());
+    await router.push(resolveLoginRedirect());
     ElNotification({
       title: getTimeState(),
       message: '欢迎登录 Sz-Admin',
@@ -109,6 +116,8 @@ const performLogin = async (formData = loginForm) => {
     });
   } finally {
     loading.value = false;
+    loginLoadingInstance?.close();
+    loginLoadingInstance = null;
   }
 };
 
