@@ -21,12 +21,13 @@
       :limit="1"
       :on-change="handleFileChange"
       :on-remove="handleFileRemove"
+      :on-exceed="handleExceed"
       class="validation-upload"
     >
       <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
       <div class="el-upload__text">将文件拖到此处，或<em>点击选择</em></div>
       <template #tip>
-        <div class="el-upload__tip">一次仅校验一个文件，实际格式和 MIME 由服务端读取文件内容识别。</div>
+        <div class="el-upload__tip">一次仅校验一个文件，已选择文件后再次选择将询问是否覆盖；实际格式和 MIME 由服务端读取文件内容识别。</div>
       </template>
     </el-upload>
 
@@ -56,7 +57,15 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { ElMessage, type UploadFile, type UploadInstance, type UploadUserFile } from 'element-plus';
+import {
+  ElMessage,
+  ElMessageBox,
+  genFileId,
+  type UploadFile,
+  type UploadInstance,
+  type UploadRawFile,
+  type UploadUserFile
+} from 'element-plus';
 import { UploadFilled } from '@element-plus/icons-vue';
 import { validateMaterialFileApi } from '@/modules/material/api/materialCategory';
 import { useDialogWidth } from '@/hooks/useDialogWidth';
@@ -94,6 +103,28 @@ const handleFileChange = (file: UploadFile) => {
 const handleFileRemove = () => {
   rawFile.value = undefined;
   result.value = undefined;
+};
+
+// 已有文件时再次选择会触发 on-exceed（limit=1），询问用户是否用新文件覆盖
+const handleExceed = (files: File[]) => {
+  const file = files[0];
+  if (!file) return;
+
+  ElMessageBox.confirm('当前已选择文件，是否用新文件覆盖？', '提示', {
+    confirmButtonText: '覆盖',
+    cancelButtonText: '取消',
+    type: 'warning'
+  })
+    .then(() => {
+      uploadRef.value?.clearFiles();
+      const raw = file as UploadRawFile;
+      raw.uid = genFileId();
+      // handleStart 会以 ready 状态重新加入列表并触发 on-change，自动更新 rawFile 并清空旧校验结果
+      uploadRef.value?.handleStart(raw);
+    })
+    .catch(() => {
+      // 用户取消覆盖，保留原有文件
+    });
 };
 
 const handleValidate = async () => {
