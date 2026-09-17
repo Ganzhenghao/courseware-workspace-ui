@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>模型新增 / 编辑弹窗 · 优化设计稿</title>
+<style>
+  /* ========== 基础 ========== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #009688;
+    --primary-dark: #00796b;
+    --primary-light: #e6f5f3;
+    --primary-lighter: #f2faf9;
+    --success: #52c41a;
+    --warning: #faad14;
+    --danger: #ff4d4f;
+    --text-main: #303133;
+    --text-regular: #606266;
+    --text-secondary: #909399;
+    --text-placeholder: #a8abb2;
+    --border: #dcdfe6;
+    --border-light: #e4e7ed;
+    --border-lighter: #ebeef5;
+    --fill: #f5f7fa;
+    --fill-light: #fafafa;
+    --radius-sm: 4px;
+    --radius: 6px;
+    --radius-lg: 10px;
+    --shadow-dialog: 0 12px 32px 4px rgba(0, 0, 0, .08), 0 8px 20px rgba(0, 0, 0, .06);
+  }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+    background: #eef1f5;
+    color: var(--text-main);
+    font-size: 14px;
+    padding: 32px 24px 64px;
+    min-width: 1280px;
+  }
+  code, .mono { font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace; }
+
+  /* ========== 页面框架 ========== */
+  .page-head { max-width: 1180px; margin: 0 auto 24px; }
+  .page-head h1 { font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .page-head h1 .ver { font-size: 12px; font-weight: 400; color: var(--text-secondary); background: #fff; border: 1px solid var(--border-lighter); padding: 3px 10px; border-radius: 20px; }
+  .page-head p { color: var(--text-secondary); margin-top: 8px; line-height: 1.7; }
+  .view-switch { display: inline-flex; background: #fff; border: 1px solid var(--border-light); border-radius: 8px; padding: 4px; margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .view-switch button { border: none; background: transparent; padding: 7px 18px; font-size: 13px; color: var(--text-regular); border-radius: 6px; cursor: pointer; transition: all .2s; }
+  .view-switch button.active { background: var(--primary); color: #fff; font-weight: 500; }
+
+  /* 优化点摘要卡 */
+  .summary { max-width: 1180px; margin: 0 auto 28px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .summary .s-card { background: #fff; border: 1px solid var(--border-lighter); border-radius: var(--radius-lg); padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.03); }
+  .s-card .num { width: 26px; height: 26px; border-radius: 8px; background: var(--primary-light); color: var(--primary); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+  .s-card h4 { font-size: 13px; margin-bottom: 5px; }
+  .s-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+
+  /* mock 区块 */
+  .mock { max-width: 1180px; margin: 0 auto 48px; }
+  .mock-label { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .mock-label .tag { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 6px; }
+  .mock-label .tag.old { background: #fdecec; color: var(--danger); }
+  .mock-label .tag.new { background: var(--primary-light); color: var(--primary-dark); }
+  .mock-label span.desc { color: var(--text-secondary); font-size: 13px; }
+
+  /* ========== 弹窗通用骨架 ========== */
+  .dialog { background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-dialog); overflow: hidden; }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border-lighter); }
+  .dlg-head .t { font-size: 17px; font-weight: 600; }
+  .dlg-head .x { color: var(--text-placeholder); font-size: 18px; cursor: pointer; line-height: 1; }
+  .dlg-foot { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-top: 1px solid var(--border-lighter); background: var(--fill-light); }
+
+  /* ========== ① 当前版本（还原示意） ========== */
+  .cur .dlg-head .t { font-size: 16px; }
+  .cur .dlg-body { padding: 20px 24px; }
+  .cur-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .cur-row.c3 { grid-template-columns: repeat(3, 1fr); }
+  .fi { margin-bottom: 16px; }
+  .fi label { display: block; font-size: 13px; color: var(--text-main); margin-bottom: 6px; }
+  .fi label .req { color: var(--danger); margin-right: 2px; }
+  .ctrl { height: 32px; border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; padding: 0 11px; color: var(--text-regular); font-size: 13px; background: #fff; }
+  .ctrl.disabled { background: var(--fill); color: var(--text-placeholder); cursor: not-allowed; }
+  .ctrl.num { justify-content: space-between; }
+  .ctrl.num .sp { display: flex; gap: 8px; color: var(--text-secondary); user-select: none; }
+  .cur .divider { display: flex; align-items: center; gap: 12px; color: var(--text-regular); font-size: 14px; margin: 18px 0 16px; }
+  .cur .divider::before { content: ''; width: 24px; border-top: 1px solid var(--border); }
+  .cur .divider::after { content: ''; flex: 1; border-top: 1px solid var(--border-lighter); }
+  .cur .caps { display: flex; gap: 4px 18px; flex-wrap: wrap; }
+  .cur .caps label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-regular); }
+  .cbx { width: 13px; height: 13px; border: 1px solid var(--border); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; }
+  .cbx.on { background: var(--primary); border-color: var(--primary); }
+  .cbx.on::after { content: '✓'; color: #fff; font-size: 11px; line-height: 1; }
+  .cbx.lock { background: var(--primary); border-color: var(--primary); }
+  .cbx.lock::after { content: '✓'; color: #fff; font-size: 11px; }
+  .sw { width: 34px; height: 18px; border-radius: 10px; background: #d1d5db; position: relative; cursor: pointer; transition: background .2s; flex-shrink: 0; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .sw.on { background: var(--primary); }
+  .sw.on::after { left: 18px; }
+  .cur .sw-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .cur .collapse { border: 1px solid var(--border-lighter); border-radius: var(--radius-sm); margin: 4px 0 16px; }
+  .cur .collapse .ch { padding: 10px 14px; font-size: 13px; color: var(--text-regular); background: var(--fill-light); border-bottom: 1px solid var(--border-lighter); }
+  .cur .collapse .alert { margin: 12px 14px; background: #fdf6ec; color: #b88230; font-size: 12px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid #faecd8; }
+  .cur .collapse .cb { padding: 0 14px 12px; }
+  textarea.json { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12px; color: var(--text-regular); resize: vertical; min-height: 52px; font-family: Menlo, Consolas, monospace; line-height: 1.6; }
+  .btn { padding: 8px 18px; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: #fff; color: var(--text-regular); transition: all .15s; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.primary:hover { background: var(--primary-dark); }
+  .cur-note { margin-top: 14px; padding: 12px 16px; background: #fff7f7; border: 1px solid #ffdcdc; border-radius: var(--radius-lg); color: #b45555; font-size: 12.5px; line-height: 1.9; }
+
+  /* ========== ② 优化方案 ========== */
+  .new .dlg-head { padding: 16px 20px 16px 24px; background: linear-gradient(135deg, #f7fcfb 0%, #ffffff 60%); }
+  .new .dlg-head .lft { display: flex; align-items: center; gap: 14px; }
+  .badge-icon { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, #00bfa5, #00897b); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; box-shadow: 0 4px 10px rgba(0, 150, 136, .28); }
+  .new .dlg-head .tt { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+  .new .dlg-head .sub { font-size: 12px; color: var(--text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 8px; }
+  .pill { font-size: 11px; padding: 2px 9px; border-radius: 20px; font-weight: 500; }
+  .pill.ok { background: #f0fbef; color: #4da92c; border: 1px solid #d9f2d0; }
+  .pill.type { background: #f4f4f5; color: var(--text-secondary); border: 1px solid var(--border-lighter); }
+  .pill.code { background: var(--primary-light); color: var(--primary-dark); border: 1px solid #c6e9e4; font-family: Menlo, Consolas, monospace; }
+
+  .new .dlg-body { display: flex; min-height: 620px; }
+
+  /* 左侧锚点导航 */
+  .side { width: 188px; flex-shrink: 0; border-right: 1px solid var(--border-lighter); background: var(--fill-light); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .side .cap { font-size: 11px; color: var(--text-placeholder); padding: 0 12px 10px; letter-spacing: 2px; }
+  .nav-it { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; color: var(--text-regular); transition: all .18s; position: relative; }
+  .nav-it .ic { width: 28px; height: 28px; border-radius: 8px; background: #fff; border: 1px solid var(--border-lighter); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-secondary); transition: all .18s; }
+  .nav-it .tx b { display: block; font-size: 13px; font-weight: 500; }
+  .nav-it .tx i { font-style: normal; font-size: 11px; color: var(--text-placeholder); }
+  .nav-it:hover { background: #fff; }
+  .nav-it.active { background: #fff; color: var(--primary-dark); box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+  .nav-it.active .ic { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .nav-it.active::before { content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 3px; background: var(--primary); }
+  .side .tip { margin-top: auto; padding: 12px; background: var(--primary-lighter); border: 1px dashed #b9e2dc; border-radius: 8px; font-size: 11.5px; color: #4a9e94; line-height: 1.7; }
+
+  /* 右侧滚动内容 */
+  .main { flex: 1; padding: 20px 24px 24px; overflow-y: auto; max-height: 620px; }
+  .section { margin-bottom: 26px; scroll-margin-top: 8px; }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .sec-head .sn { width: 22px; height: 22px; border-radius: 7px; background: var(--primary-light); color: var(--primary-dark); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .sec-head h3 { font-size: 14.5px; font-weight: 600; }
+  .sec-head .hint { font-size: 12px; color: var(--text-placeholder); }
+  .card { background: #fff; border: 1px solid var(--border-lighter); border-radius: var(--radius-lg); padding: 18px 18px 6px; box-shadow: 0 1px 3px rgba(0,0,0,.025); }
+  .card + .card { margin-top: 12px; }
+
+  /* 表单项（带辅助说明） */
+  .grid { display: grid; gap: 14px 16px; }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .fi2 .lb { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text-main); font-weight: 500; margin-bottom: 7px; }
+  .fi2 .lb .req { color: var(--danger); }
+  .fi2 .lb .q { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border); color: var(--text-secondary); font-size: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: help; background: #fff; }
+  .fi2 .lb .lk { font-size: 10.5px; color: var(--text-placeholder); background: var(--fill); border-radius: 4px; padding: 1px 6px; font-weight: 400; }
+  .fi2 .sub-tip { font-size: 11px; color: var(--text-placeholder); margin-top: 5px; line-height: 1.5; }
+  .ctrl2 { height: 34px; border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; padding: 0 11px; font-size: 13px; color: var(--text-regular); background: #fff; transition: border-color .15s, box-shadow .15s; }
+  .ctrl2:focus-within, .ctrl2.hi { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(0, 150, 136, .12); }
+  .ctrl2 .ph { color: var(--text-placeholder); }
+  .ctrl2.num2 { justify-content: space-between; padding-right: 6px; }
+  .ctrl2.num2 .sp { display: flex; align-items: center; gap: 2px; }
+  .ctrl2.num2 .sp span { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; border-radius: 4px; }
+  .ctrl2.num2 .sp span:hover { background: var(--fill); color: var(--primary); }
+  .ctrl2 .unit { color: var(--text-placeholder); font-size: 12px; margin-left: 6px; }
+  .ctrl2 .suf-arrow { margin-left: auto; color: var(--text-placeholder); font-size: 11px; }
+  .ctrl2 .lock-ic { margin-left: auto; color: var(--text-placeholder); font-size: 12px; }
+  .sel-tag { display: inline-flex; align-items: center; gap: 7px; }
+  .sel-tag .dot { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, #10a37f, #0d8a6b); color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+
+  /* 模型类型只读块 */
+  .readonly-box { height: 34px; border: 1px dashed var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 8px; padding: 0 11px; background: var(--fill-light); color: var(--text-secondary); font-size: 12.5px; }
+
+  /* 能力卡片 */
+  .caps-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding-bottom: 12px; }
+  .cap-card { border: 1.5px solid var(--border-lighter); border-radius: 9px; padding: 12px 10px 10px; text-align: center; cursor: pointer; transition: all .18s; position: relative; background: #fff; }
+  .cap-card .em { font-size: 20px; line-height: 1; }
+  .cap-card b { display: block; font-size: 12.5px; margin-top: 7px; color: var(--text-regular); font-weight: 500; }
+  .cap-card i { font-style: normal; display: block; font-size: 10.5px; color: var(--text-placeholder); margin-top: 3px; }
+  .cap-card:hover { border-color: #9adbd3; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,.05); }
+  .cap-card.on { border-color: var(--primary); background: var(--primary-lighter); }
+  .cap-card.on b { color: var(--primary-dark); }
+  .cap-card.on::after { content: '✓'; position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,150,136,.35); }
+  .cap-card.lock { cursor: not-allowed; }
+  .cap-card .lockb { position: absolute; top: 8px; right: 8px; font-size: 10px; color: var(--text-placeholder); }
+
+  /* 开关行（设置风格） */
+  .sw-list { padding-bottom: 6px; }
+  .sw-item { display: flex; align-items: center; justify-content: space-between; padding: 11px 4px; border-bottom: 1px dashed var(--border-lighter); }
+  .sw-item:last-child { border-bottom: none; }
+  .sw-item .in b { font-size: 13px; font-weight: 500; display: block; }
+  .sw-item .in span { font-size: 11.5px; color: var(--text-placeholder); margin-top: 2px; display: block; }
+
+  /* 参数分组小标题 */
+  .pg-title { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--text-regular); margin-bottom: 13px; }
+  .pg-title::after { content: ''; flex: 1; border-top: 1px dashed var(--border-lighter); }
+  .pg-title .mini { font-size: 11px; color: var(--text-placeholder); font-weight: 400; }
+
+  /* 温度滑杆组合 */
+  .slider-row { display: flex; align-items: center; gap: 10px; height: 34px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 11px; background: #fff; }
+  .slider-row .track { flex: 1; height: 4px; border-radius: 3px; background: linear-gradient(90deg, #c6e9e4 0%, #c6e9e4 35%, #e4e7ed 35%, #e4e7ed 100%); position: relative; cursor: pointer; }
+  .slider-row .track .dot2 { position: absolute; left: 35%; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+  .slider-row .mm { font-size: 10.5px; color: var(--text-placeholder); }
+  .slider-row .vl { width: 40px; text-align: right; font-size: 13px; color: var(--primary-dark); font-weight: 600; }
+
+  /* 互斥分段器 */
+  .seg { display: flex; background: var(--fill); border-radius: 7px; padding: 3px; gap: 3px; margin-bottom: 14px; }
+  .seg .s { flex: 1; text-align: center; padding: 7px 10px; font-size: 12.5px; color: var(--text-secondary); border-radius: 5px; cursor: pointer; transition: all .15s; }
+  .seg .s.on { background: #fff; color: var(--primary-dark); font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .seg .s.on::before { content: '●'; font-size: 8px; margin-right: 5px; color: var(--primary); }
+  .mutual-off { opacity: .45; pointer-events: none; }
+
+  /* 高级 JSON 编辑区 */
+  .adv-alert { display: flex; gap: 10px; background: #fff8e8; border: 1px solid #f5deb3; color: #9a7420; font-size: 12px; line-height: 1.7; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
+  .json-box { border: 1px solid #263238; background: #1e2a30; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  .json-box .jb-head { display: flex; justify-content: space-between; align-items: center; padding: 7px 12px; background: #16211f; border-bottom: 1px solid #263238; }
+  .json-box .jb-head b { color: #9ae6d4; font-size: 12px; font-weight: 500; }
+  .json-box .jb-head .st { font-size: 10.5px; padding: 1px 8px; border-radius: 10px; }
+  .json-box .jb-head .st.ok { background: rgba(82, 196, 26, .15); color: #8fd460; }
+  .json-box pre { padding: 10px 14px; color: #b7c7c3; font-size: 12px; line-height: 1.7; font-family: Menlo, Consolas, monospace; }
+  .json-box pre .k { color: #7fd7c8; }
+  .json-box pre .s2 { color: #e8c07d; }
+
+  /* 折叠容器（高级配置） */
+  .fold { border: 1px solid var(--border-lighter); border-radius: var(--radius-lg); overflow: hidden; }
+  .fold-h { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; background: var(--fill-light); cursor: pointer; font-size: 13px; color: var(--text-regular); font-weight: 500; }
+  .fold-h .ar { transition: transform .2s; color: var(--text-placeholder); font-size: 11px; }
+  .fold.open .fold-h .ar { transform: rotate(180deg); }
+  .fold-b { display: none; padding: 16px 16px 4px; background: #fff; }
+  .fold.open .fold-b { display: block; }
+
+  /* 底部 */
+  .new .dlg-foot .hint2 { font-size: 12px; color: var(--text-placeholder); display: flex; align-items: center; gap: 6px; }
+  .new .dlg-foot .hint2 .dotp { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px rgba(82,196,26,.15); }
+  .btns { display: flex; gap: 10px; }
+  .btn.ghost { border-color: transparent; color: var(--text-secondary); }
+  .btn.ghost:hover { color: var(--primary); }
+
+  /* 标注编号气泡（设计说明锚点） */
+  .anno { position: absolute; right: -34px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; background: var(--warning); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(250, 173, 20, .4); z-index: 5; }
+  .anno-wrap { position: relative; }
+  .anno-legend { max-width: 1180px; margin: -36px auto 0; background: #fffbeb; border: 1px solid #fdeabd; border-radius: var(--radius-lg); padding: 14px 20px; font-size: 12.5px; color: #8a6d1f; line-height: 2; }
+  .anno-legend b.w { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; background: var(--warning); color: #fff; font-size: 11px; align-items: center; justify-content: center; margin-right: 6px; }
+
+  @media (max-width: 1240px) { .summary { grid-template-columns: repeat(3, 1fr); } }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>AI 模型 · 新增 / 编辑弹窗优化设计稿 <span class="ver">模型管理 · ModelDialog</span></h1>
+  <p>目标：在保留全部字段与校验规则不变的前提下，重新组织信息层级 —— 分区导航、参数分组、能力卡片化、互斥联动可视化，降低“一屏 30+ 输入框”的压迫感。样式遵循项目 Element Plus 主题（主色 #009688）。</p>
+  <div class="view-switch">
+    <button id="btnBoth" class="active" onclick="setView('both')">对比查看</button>
+    <button id="btnNew" onclick="setView('new')">仅看优化方案</button>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="s-card"><div class="num">1</div><h4>左侧锚点分区导航</h4><p>基本信息 / 能力 / 参数 / 高级四大分区，点击定位，长表单一目了然。</p></div>
+  <div class="s-card"><div class="num">2</div><h4>参数分组 + 辅助说明</h4><p>12 个参数按“采样 / 输出 / 惩罚 / 稳定性”分组，每个字段附中文用途提示。</p></div>
+  <div class="s-card"><div class="num">3</div><h4>能力卡片化</h4><p>能力从复选框升级为图标卡片；开关改为“标题 + 说明”设置行。</p></div>
+  <div class="s-card"><div class="num">4</div><h4>互斥输入联动</h4><p>Max Tokens 二选一分段器，未选中侧自动置灰，杜绝同时填写。</p></div>
+  <div class="s-card"><div class="num">5</div><h4>JSON 代码块化</h4><p>高级 JSON 改为深色代码编辑风格，带格式校验状态角标。</p></div>
+</div>
+
+<!-- ============ 当前版本 ============ -->
+<section class="mock cur" id="mockCurrent">
+  <div class="mock-label"><span class="tag old">现状还原</span><span class="desc">当前 ModelDialog 布局示意（980px，全部字段平铺）</span></div>
+  <div class="dialog" style="max-width: 980px;">
+    <div class="dlg-head"><span class="t">编辑模型</span><span class="x">✕</span></div>
+    <div class="dlg-body">
+      <div class="cur-row">
+        <div class="fi"><label><span class="req">*</span>模型名称</label><div class="ctrl">GPT-4.1 主模型</div></div>
+        <div class="fi"><label><span class="req">*</span>模型编码</label><div class="ctrl disabled">GPT-4.1</div></div>
+        <div class="fi"><label><span class="req">*</span>所属提供商</label><div class="ctrl">公司 OpenAI&nbsp;&nbsp;<span style="margin-left:auto;color:#a8abb2;font-size:11px;">▾</span></div></div>
+        <div class="fi"><label><span class="req">*</span>远端模型名</label><div class="ctrl">gpt-4.1</div></div>
+        <div class="fi"><label>模型类型</label><div class="ctrl disabled">CHAT</div></div>
+        <div class="fi"><label>上下文窗口</label><div class="ctrl num"><span>1000000</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+      </div>
+      <div class="fi" style="margin-top:4px;">
+        <label>模型能力</label>
+        <div class="caps">
+          <label><span class="cbx lock"></span>文本</label>
+          <label><span class="cbx on"></span>视觉</label>
+          <label><span class="cbx on"></span>工具调用</label>
+          <label><span class="cbx"></span>结构化输出</label>
+          <label><span class="cbx"></span>思考</label>
+        </div>
+      </div>
+      <div class="cur-row sw-row" style="margin-top:10px;">
+        <div class="fi"><label>启用模型</label><div class="sw on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="fi"><label>默认流式</label><div class="sw" onclick="this.classList.toggle('on')"></div></div>
+        <div class="fi"><label>思考模式</label><div class="sw" onclick="this.classList.toggle('on')"></div></div>
+      </div>
+      <div class="divider">标准生成参数</div>
+      <div class="cur-row c3">
+        <div class="fi"><label>Temperature</label><div class="ctrl num"><span>0.7</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>Top P</label><div class="ctrl num"><span>0.95</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>Top K</label><div class="ctrl num"><span style="color:#a8abb2">—</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>Max Tokens</label><div class="ctrl num"><span>8192</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>Max Completion Tokens</label><div class="ctrl disabled num"><span style="color:#a8abb2">—</span></div></div>
+        <div class="fi"><label>思考预算</label><div class="ctrl num"><span>2048</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>频率惩罚</label><div class="ctrl num"><span>0</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>存在惩罚</label><div class="ctrl num"><span>0</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>推理强度</label><div class="ctrl">中 <span style="margin-left:auto;color:#a8abb2;font-size:11px;">▾</span></div></div>
+        <div class="fi"><label>随机种子</label><div class="ctrl num"><span style="color:#a8abb2">—</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>超时（秒）</label><div class="ctrl num"><span>120</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>最大尝试次数</label><div class="ctrl num"><span>3</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+      </div>
+      <div class="cur-row" style="grid-template-columns:1fr 1fr;">
+        <div class="fi"><label>缓存控制</label><div class="sw" onclick="this.classList.toggle('on')"></div></div>
+        <div class="fi"><label>并行工具调用</label><div class="sw on" onclick="this.classList.toggle('on')"></div></div>
+      </div>
+      <div class="collapse">
+        <div class="ch">▸ 高级请求 JSON</div>
+        <div class="alert">⚠ 扩展请求体不能覆盖 model、messages、stream、tools 等核心字段；敏感值使用完整的 ${'$'}{credential}。</div>
+        <div class="cb">
+          <div class="fi"><label>附加请求头 JSON</label><textarea class="json" rows="3">{ "X-Title": "courseware" }</textarea></div>
+          <div class="fi"><label>附加请求体 JSON</label><textarea class="json" rows="3">{}</textarea></div>
+          <div class="fi"><label>附加查询参数 JSON</label><textarea class="json" rows="3">{}</textarea></div>
+        </div>
+      </div>
+      <div class="cur-row">
+        <div class="fi"><label>排序</label><div class="ctrl num"><span>1</span><span class="sp"><span>−</span><span>＋</span></span></div></div>
+        <div class="fi"><label>备注</label><div class="ctrl">教研场景主力模型</div></div>
+      </div>
+    </div>
+    <div class="dlg-foot" style="justify-content:flex-end;gap:10px;">
+      <span class="btn">取消</span><span class="btn primary">保存</span>
+    </div>
+  </div>
+  <div class="cur-note">
+    <b>现状问题：</b>① 30+ 字段单屏平铺，无信息层级，滚动很长且容易迷失位置；② Temperature / Top P 等英文标签无任何解释，非算法背景用户不敢填；③ 能力复选框与三个开关混排，语义密度低；④ Max Tokens 与 Max Completion Tokens 互斥只能靠置灰 + 提交后报错发现；⑤ 高级 JSON 与“排序 / 备注”等管理字段交错，折叠区展开后底部字段被顶开。
+  </div>
+</section>
+
+<!-- ============ 优化方案 ============ -->
+<section class="mock new" id="mockNew">
+  <div class="mock-label"><span class="tag new">优化方案</span><span class="desc">分区导航 + 参数分组 + 卡片化（宽 1080px，内容区独立滚动，字段与校验规则保持不变）</span></div>
+  <div class="dialog" style="max-width: 1080px;">
+    <div class="dlg-head">
+      <div class="lft">
+        <div class="badge-icon">◆</div>
+        <div>
+          <div class="tt">编辑模型</div>
+          <div class="sub">
+            <span class="pill code">GPT-4.1</span>
+            <span>公司 OpenAI · 更新于 2026-09-12 14:22</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="pill ok">● 启用中</span>
+        <span class="pill type">CHAT 对话</span>
+        <span class="x" style="margin-left:6px;">✕</span>
+      </div>
+    </div>
+
+    <div class="dlg-body">
+      <!-- 左侧导航 -->
+      <aside class="side">
+        <div class="cap">配置分区</div>
+        <div class="nav-it active" data-sec="secBasic" onclick="goSec(this)">
+          <span class="ic">①</span>
+          <span class="tx"><b>基本信息</b><i>名称 · 编码 · 归属</i></span>
+        </div>
+        <div class="nav-it" data-sec="secCap" onclick="goSec(this)">
+          <span class="ic">②</span>
+          <span class="tx"><b>模型能力</b><i>能力 · 功能开关</i></span>
+        </div>
+        <div class="nav-it" data-sec="secParam" onclick="goSec(this)">
+          <span class="ic">③</span>
+          <span class="tx"><b>生成参数</b><i>采样 · 输出 · 稳定性</i></span>
+        </div>
+        <div class="nav-it" data-sec="secAdv" onclick="goSec(this)">
+          <span class="ic">④</span>
+          <span class="tx"><b>高级配置</b><i>扩展 JSON · 管理</i></span>
+        </div>
+        <div class="tip">💡 参数留空表示<b>不覆盖</b>提供商默认值，仅在需要精细控制时填写。</div>
+      </aside>
+
+      <!-- 右侧内容 -->
+      <div class="main" id="mainScroll">
+
+        <!-- ① 基本信息 -->
+        <div class="section" id="secBasic">
+          <div class="sec-head"><span class="sn">1</span><h3>基本信息</h3><span class="hint">编码创建后不可修改</span></div>
+          <div class="card">
+            <div class="grid g2">
+              <div class="fi2 anno-wrap">
+                <div class="anno">1</div>
+                <div class="lb"><span class="req">*</span>模型名称 <span class="q">?</span></div>
+                <div class="ctrl2">GPT-4.1 主模型</div>
+                <div class="sub-tip">展示给业务侧的名称，建议带用途后缀</div>
+              </div>
+              <div class="fi2">
+                <div class="lb"><span class="req">*</span>模型编码 <span class="q">?</span><span class="lk">编辑态锁定</span></div>
+                <div class="ctrl2" style="background:var(--fill);color:var(--text-secondary);">GPT-4.1<span class="lock-ic">🔒</span></div>
+                <div class="sub-tip">全局唯一，字母开头，仅字母 / 数字 / <span class="mono">_ . -</span></div>
+              </div>
+              <div class="fi2">
+                <div class="lb"><span class="req">*</span>所属提供商</div>
+                <div class="ctrl2 hi"><span class="sel-tag"><span class="dot">O</span>公司 OpenAI</span><span class="suf-arrow">▾</span></div>
+              </div>
+              <div class="fi2">
+                <div class="lb"><span class="req">*</span>远端模型名 <span class="q">?</span></div>
+                <div class="ctrl2">gpt-4.1</div>
+                <div class="sub-tip">调用提供商 API 时实际传入的 model 值</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">模型类型</div>
+                <div class="readonly-box">💬 当前仅支持 CHAT 对话模型</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">上下文窗口 <span class="q">?</span></div>
+                <div class="ctrl2">1000000<span class="unit">tokens</span></div>
+                <div class="sub-tip">模型单次会话可容纳的最大 token 数</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ② 模型能力 -->
+        <div class="section" id="secCap">
+          <div class="sec-head"><span class="sn">2</span><h3>模型能力</h3><span class="hint">文本为必选能力</span></div>
+          <div class="card anno-wrap" style="position:relative;">
+            <div class="anno" style="right:14px;top:-11px;">2</div>
+            <div class="caps-grid">
+              <div class="cap-card on lock" title="必选">
+                <span class="lockb">🔒</span>
+                <span class="em">📝</span><b>文本</b><i>必选 · 文本对话</i>
+              </div>
+              <div class="cap-card on" onclick="this.classList.toggle('on')">
+                <span class="em">🖼</span><b>视觉</b><i>图片理解输入</i>
+              </div>
+              <div class="cap-card on" onclick="this.classList.toggle('on')">
+                <span class="em">🔧</span><b>工具调用</b><i>Function Calling</i>
+              </div>
+              <div class="cap-card" onclick="this.classList.toggle('on')">
+                <span class="em">🧱</span><b>结构化输出</b><i>JSON Schema</i>
+              </div>
+              <div class="cap-card" onclick="this.classList.toggle('on')">
+                <span class="em">💭</span><b>思考</b><i>推理链输出</i>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="sw-list">
+              <div class="sw-item">
+                <div class="in"><b>启用模型</b><span>停用后业务侧不可再选择该模型，存量配置不受影响</span></div>
+                <div class="sw on" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="sw-item">
+                <div class="in"><b>默认流式输出</b><span>对话默认逐 token 流式返回，适合打字机效果</span></div>
+                <div class="sw" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="sw-item">
+                <div class="in"><b>思考模式</b><span>开启后返回思考过程；需模型具备“思考”能力</span></div>
+                <div class="sw" onclick="this.classList.toggle('on')"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ③ 生成参数 -->
+        <div class="section" id="secParam">
+          <div class="sec-head"><span class="sn">3</span><h3>生成参数</h3><span class="hint">全部可选 · 留空使用提供商默认</span></div>
+
+          <div class="card">
+            <div class="pg-title">🎛 采样控制<span class="mini">控制输出的随机性与多样性</span></div>
+            <div class="grid g2">
+              <div class="fi2 anno-wrap">
+                <div class="anno">3</div>
+                <div class="lb">Temperature <span class="q">?</span></div>
+                <div class="slider-row">
+                  <span class="mm">严谨 0</span>
+                  <div class="track"><span class="dot2"></span></div>
+                  <span class="mm">2 创造</span>
+                  <span class="vl">0.7</span>
+                </div>
+                <div class="sub-tip">越高越发散，教学讲解类建议 0.3 – 0.8</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">Top P <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>0.95</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">核采样范围，与 Temperature 二选一调节即可</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">Top K <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span style="color:var(--text-placeholder)">留空</span><span class="sp"><span>−</span><span>＋</span></span></div>
+              </div>
+              <div class="fi2">
+                <div class="lb">随机种子 <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span style="color:var(--text-placeholder)">留空</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">固定后相同输入产出稳定，便于复现问题</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card anno-wrap" style="position:relative;">
+            <div class="anno" style="right:14px;top:-11px;">4</div>
+            <div class="pg-title">📏 输出控制<span class="mini">两种 Token 上限互斥，二选一</span></div>
+            <div class="seg" id="segToken">
+              <div class="s on" onclick="pickToken(0,this)">Max Tokens（通用）</div>
+              <div class="s" onclick="pickToken(1,this)">Max Completion Tokens（OpenAI o 系列）</div>
+            </div>
+            <div class="grid g2">
+              <div class="fi2" id="mtA">
+                <div class="lb">Max Tokens <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>8192</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">单次回复的最大总 token 数</div>
+              </div>
+              <div class="fi2 mutual-off" id="mtB">
+                <div class="lb">Max Completion Tokens</div>
+                <div class="ctrl2 num2"><span style="color:var(--text-placeholder)">未启用</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">仅计入输出 token，o 系列模型专用</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="pg-title">⚖️ 惩罚与推理<span class="mini">抑制重复 · 控制推理投入</span></div>
+            <div class="grid g4">
+              <div class="fi2">
+                <div class="lb">频率惩罚 <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>0</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">越高越少重复用词</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">存在惩罚 <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>0</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">越高越倾向新话题</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">推理强度 <span class="q">?</span></div>
+                <div class="ctrl2">中<span class="suf-arrow">▾</span></div>
+                <div class="sub-tip">低 / 中 / 高</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">思考预算 <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>2048</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">思考过程最大 token</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="pg-title">🛡 稳定性与性能<span class="mini">超时 · 重试 · 调用行为</span></div>
+            <div class="grid g2" style="margin-bottom:12px;">
+              <div class="fi2">
+                <div class="lb">超时时间 <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>120</span><span class="unit">秒</span><span class="sp"><span>−</span><span>＋</span></span></div>
+              </div>
+              <div class="fi2">
+                <div class="lb">最大尝试次数 <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>3</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">失败自动重试的上限</div>
+              </div>
+            </div>
+            <div class="sw-list">
+              <div class="sw-item">
+                <div class="in"><b>缓存控制</b><span>启用提示词缓存，长上下文场景降低延迟与费用</span></div>
+                <div class="sw" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="sw-item">
+                <div class="in"><b>并行工具调用</b><span>允许模型一次返回多个工具调用请求</span></div>
+                <div class="sw on" onclick="this.classList.toggle('on')"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ④ 高级配置 -->
+        <div class="section" id="secAdv">
+          <div class="sec-head"><span class="sn">4</span><h3>高级配置</h3><span class="hint">扩展请求 · 管理字段</span></div>
+          <div class="fold open anno-wrap" id="foldAdv" style="position:relative;">
+            <div class="anno" style="right:14px;top:-11px;">5</div>
+            <div class="fold-h" onclick="document.getElementById('foldAdv').classList.toggle('open')">
+              <span>🧩 扩展请求 JSON <span style="font-weight:400;color:var(--text-placeholder);font-size:12px;">（默认收起，面向高级用户）</span></span>
+              <span class="ar">▾</span>
+            </div>
+            <div class="fold-b">
+              <div class="adv-alert">⚠ 扩展内容不能覆盖 <span class="mono">model / messages / stream / tools</span> 等核心字段；敏感值使用完整占位符 <span class="mono">${'$'}{credential}</span>，运行时替换。</div>
+              <div class="json-box">
+                <div class="jb-head"><b>附加请求头 Headers</b><span class="st ok">✓ JSON 格式正确</span></div>
+                <pre>{ <span class="k">"X-Title"</span>: <span class="s2">"courseware"</span> }</pre>
+              </div>
+              <div class="grid g2">
+                <div class="json-box">
+                  <div class="jb-head"><b>附加请求体 Body</b><span class="st ok">✓</span></div>
+                  <pre>{ }</pre>
+                </div>
+                <div class="json-box">
+                  <div class="jb-head"><b>附加查询参数 Query</b><span class="st ok">✓</span></div>
+                  <pre>{ }</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <div class="grid g2">
+              <div class="fi2">
+                <div class="lb">排序 <span class="q">?</span></div>
+                <div class="ctrl2 num2"><span>1</span><span class="sp"><span>−</span><span>＋</span></span></div>
+                <div class="sub-tip">数值越小越靠前，影响选择列表默认顺序</div>
+              </div>
+              <div class="fi2">
+                <div class="lb">备注</div>
+                <div class="ctrl2">教研场景主力模型</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="dlg-foot">
+      <div class="hint2"><span class="dotp"></span>编辑中 · GPT-4.1 · 有 2 处未保存修改</div>
+      <div class="btns">
+        <span class="btn ghost">恢复默认参数</span>
+        <span class="btn">取消</span>
+        <span class="btn primary">保 存</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="anno-legend" id="annoLegend">
+  <b style="font-size:13px;">图注（对应右侧 ①—⑤ 圆形编号）：</b><br />
+  <b class="w">1</b> 必填项附灰字说明，编辑态编码用锁形标识替代普通置灰；&nbsp;&nbsp;
+  <b class="w">2</b> 能力卡片：选中态描边 + 角标勾，“文本”带锁表示必选不可取消；&nbsp;&nbsp;
+  <b class="w">3</b> Temperature 用“严谨 ↔ 创造”滑杆表达语义，替代裸数字输入；<br />
+  <b class="w">4</b> 两种 Token 上限改为分段器互斥切换，未选中侧整体置灰；&nbsp;&nbsp;
+  <b class="w">5</b> 高级 JSON 深色代码块 + 实时格式校验角标（示意），默认收起。<br />
+  <span style="color:#a9853b">※ 本页为静态设计稿：分区导航、能力卡片、开关、分段器、折叠面板均可点击交互体验；字段与校验规则与现有 ModelDialog 完全一致。</span>
+</div>
+
+<script>
+  // 视图切换：对比 / 仅优化方案
+  function setView(mode) {
+    document.getElementById('mockCurrent').style.display = mode === 'new' ? 'none' : '';
+    document.getElementById('annoLegend').style.marginTop = mode === 'new' ? '20px' : '';
+    document.getElementById('btnBoth').classList.toggle('active', mode === 'both');
+    document.getElementById('btnNew').classList.toggle('active', mode === 'new');
+  }
+  // 左侧导航定位 + 高亮
+  function goSec(el) {
+    document.querySelectorAll('.nav-it').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    const sec = document.getElementById(el.dataset.sec);
+    if (sec) document.getElementById('mainScroll').scrollTo({ top: sec.offsetTop - 12, behavior: 'smooth' });
+  }
+  // 滚动联动高亮
+  document.getElementById('mainScroll').addEventListener('scroll', function () {
+    const tops = [...document.querySelectorAll('.section')].map(s => ({ id: s.id, top: s.offsetTop - 24 }));
+    let cur = tops[0].id;
+    for (const t of tops) if (this.scrollTop >= t.top) cur = t.id;
+    document.querySelectorAll('.nav-it').forEach(n => n.classList.toggle('active', n.dataset.sec === cur));
+  });
+  // Token 上限互斥分段器
+  function pickToken(i, el) {
+    document.querySelectorAll('#segToken .s').forEach(s => s.classList.remove('on'));
+    el.classList.add('on');
+    document.getElementById('mtA').classList.toggle('mutual-off', i === 1);
+    document.getElementById('mtB').classList.toggle('mutual-off', i === 0);
+  }
+</script>
+</body>
+</html>
