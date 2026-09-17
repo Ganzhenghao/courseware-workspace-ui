@@ -276,15 +276,15 @@
                 扩展请求体不能覆盖 model、messages、stream、tools 等核心字段；敏感值使用完整的
                 <code>${credential}</code>。
               </el-alert>
-              <el-form-item label="附加请求头 JSON" prop="headersJson"
-                ><el-input v-model="form.headersJson" type="textarea" :rows="4"
-              /></el-form-item>
-              <el-form-item label="附加请求体 JSON" prop="bodyJson"
-                ><el-input v-model="form.bodyJson" type="textarea" :rows="5"
-              /></el-form-item>
-              <el-form-item label="附加查询参数 JSON" prop="queryJson"
-                ><el-input v-model="form.queryJson" type="textarea" :rows="4"
-              /></el-form-item>
+              <el-form-item label="附加请求头 JSON" prop="headersJson">
+                <JsonEditor v-model="form.headersJson" height="120px" @blur="validateJsonField('headersJson')" />
+              </el-form-item>
+              <el-form-item label="附加请求体 JSON" prop="bodyJson">
+                <JsonEditor v-model="form.bodyJson" height="160px" @blur="validateJsonField('bodyJson')" />
+              </el-form-item>
+              <el-form-item label="附加查询参数 JSON" prop="queryJson">
+                <JsonEditor v-model="form.queryJson" height="120px" @blur="validateJsonField('queryJson')" />
+              </el-form-item>
             </el-collapse-item>
           </el-collapse>
           <div class="subheading settings-title"><span>管理信息</span><small>用于列表排序和内部备注</small></div>
@@ -330,6 +330,7 @@ import {
   Tools
 } from '@element-plus/icons-vue';
 import { useDialogWidth } from '@/hooks/useDialogWidth';
+import JsonEditor from '@/components/JsonEditor/index.vue';
 import { getAiProviderOptionsApi } from '@/modules/ai/api/provider';
 import { createAiModelApi, updateAiModelApi } from '@/modules/ai/api/model';
 import type { AiProviderOption } from '@/modules/ai/types/provider';
@@ -449,6 +450,10 @@ const validateJson = (value: string, callback: (error?: Error) => void) => {
   } catch {
     callback(new Error('JSON 格式不正确'));
   }
+};
+// JsonEditor 是自定义组件，不会自动触发 el-form 校验，失焦时显式执行对应字段规则
+const validateJsonField = (field: 'headersJson' | 'bodyJson' | 'queryJson') => {
+  formRef.value?.validateField(field).catch(() => {});
 };
 const loadProviders = async () => {
   providerOptions.value = (await getAiProviderOptionsApi()).data;

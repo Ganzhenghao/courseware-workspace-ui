@@ -59,10 +59,15 @@
             敏感键只能使用完整值 <code>${credential}</code>，运行时才会替换。
           </el-alert>
           <el-form-item label="附加请求头 JSON" prop="headersJson">
-            <el-input v-model="form.headersJson" type="textarea" :rows="5" placeholder='{ "X-Api-Key": "${credential}" }' />
+            <JsonEditor
+              v-model="form.headersJson"
+              height="140px"
+              placeholder='{ "X-Api-Key": "${credential}" }'
+              @blur="validateJsonField('headersJson')"
+            />
           </el-form-item>
           <el-form-item label="附加查询参数 JSON" prop="queryJson">
-            <el-input v-model="form.queryJson" type="textarea" :rows="4" placeholder="{}" />
+            <JsonEditor v-model="form.queryJson" height="120px" placeholder="{}" @blur="validateJsonField('queryJson')" />
           </el-form-item>
         </el-collapse-item>
       </el-collapse>
@@ -88,6 +93,7 @@ import { computed, nextTick, reactive, ref } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { createAiProviderApi, getAiAdapterOptionsApi, updateAiProviderApi } from '@/modules/ai/api/provider';
 import { useDialogWidth } from '@/hooks/useDialogWidth';
+import JsonEditor from '@/components/JsonEditor/index.vue';
 import type { AiAdapterOption, AiAdapterType, AiProvider } from '@/modules/ai/types/provider';
 
 type ProviderForm = {
@@ -157,6 +163,10 @@ const validateJson = (value: string, callback: (error?: Error) => void) => {
   } catch {
     callback(new Error('JSON 格式不正确'));
   }
+};
+// JsonEditor 是自定义组件，不会自动触发 el-form 校验，失焦时显式执行对应字段规则
+const validateJsonField = (field: 'headersJson' | 'queryJson') => {
+  formRef.value?.validateField(field).catch(() => {});
 };
 const loadOptions = async () => {
   if (!adapterOptions.value.length) adapterOptions.value = (await getAiAdapterOptionsApi()).data;
