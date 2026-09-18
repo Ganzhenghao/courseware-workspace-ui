@@ -1,4 +1,5 @@
 import type { IPageQuery } from '@/api/types';
+import type { AiHttpProtocol } from '@/modules/ai/types/provider';
 
 export type AiModelCapability = 'TEXT' | 'VISION' | 'TOOL_CALL' | 'STRUCTURED_OUTPUT' | 'THINKING';
 export type AiGenerationConfig = {
@@ -31,6 +32,7 @@ export type AiModel = {
   remoteModelName: string;
   modelType: 'CHAT';
   contextWindow?: number | null;
+  httpProtocol?: AiHttpProtocol | null;
   streamEnabled: boolean;
   thinkingEnabled: boolean;
   capabilities: AiModelCapability[];
@@ -55,6 +57,7 @@ export type AiModelPayload = {
   displayName: string;
   remoteModelName: string;
   contextWindow?: number | null;
+  httpProtocol?: AiHttpProtocol | null;
   streamEnabled: boolean;
   thinkingEnabled: boolean;
   capabilities: AiModelCapability[];

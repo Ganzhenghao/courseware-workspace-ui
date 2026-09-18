@@ -270,6 +270,12 @@
           <el-alert class="cache-alert" type="info" :closable="false" show-icon>
             仅影响请求标记；AgentScope CachePolicy 当前固定为 DISABLED。
           </el-alert>
+          <el-form-item label="HTTP 协议">
+            <el-select v-model="form.httpProtocol" class="full-width" clearable placeholder="继承提供商配置">
+              <el-option v-for="item in httpProtocolOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <span class="field-tip">留空继承提供商的协议配置；明文 HTTP 地址对接 vLLM 等服务建议选 HTTP/1.1。</span>
+          </el-form-item>
           <el-collapse class="advanced-collapse">
             <el-collapse-item title="附加请求 JSON" name="advanced-json">
               <el-alert type="warning" :closable="false" show-icon>
@@ -333,7 +339,7 @@ import { useDialogWidth } from '@/hooks/useDialogWidth';
 import JsonEditor from '@/components/JsonEditor/index.vue';
 import { getAiProviderOptionsApi } from '@/modules/ai/api/provider';
 import { createAiModelApi, updateAiModelApi } from '@/modules/ai/api/model';
-import type { AiProviderOption } from '@/modules/ai/types/provider';
+import type { AiHttpProtocol, AiProviderOption } from '@/modules/ai/types/provider';
 import type { AiModel, AiModelCapability } from '@/modules/ai/types/model';
 
 type ModelForm = {
@@ -343,6 +349,7 @@ type ModelForm = {
   providerId?: number;
   remoteModelName: string;
   contextWindow?: number;
+  httpProtocol?: AiHttpProtocol;
   streamEnabled: boolean;
   thinkingEnabled: boolean;
   capabilities: AiModelCapability[];
@@ -385,6 +392,10 @@ const sections = [
   { key: 'generation' as const, label: '生成参数', icon: Operation },
   { key: 'advanced' as const, label: '高级配置', icon: Tools }
 ];
+const httpProtocolOptions: { label: string; value: AiHttpProtocol }[] = [
+  { label: 'HTTP/1.1', value: 'HTTP_1_1' },
+  { label: 'HTTP/2', value: 'HTTP_2' }
+];
 const capabilityOptions: {
   label: string;
   value: AiModelCapability;
@@ -401,6 +412,7 @@ const defaults = (): ModelForm => ({
   modelCode: '',
   displayName: '',
   remoteModelName: '',
+  httpProtocol: undefined,
   streamEnabled: false,
   thinkingEnabled: false,
   capabilities: ['TEXT'],
@@ -483,6 +495,7 @@ const open = async (model?: AiModel) => {
     providerId: model?.providerId,
     remoteModelName: model?.remoteModelName || '',
     contextWindow: model?.contextWindow ?? undefined,
+    httpProtocol: model?.httpProtocol ?? undefined,
     streamEnabled: model?.streamEnabled ?? false,
     thinkingEnabled: model?.thinkingEnabled ?? false,
     capabilities: model?.capabilities?.includes('TEXT') ? [...model.capabilities] : ['TEXT', ...(model?.capabilities || [])],
@@ -528,6 +541,7 @@ const submit = async () => {
     displayName: form.displayName.trim(),
     remoteModelName: form.remoteModelName.trim(),
     contextWindow: form.contextWindow ?? null,
+    httpProtocol: form.httpProtocol ?? null,
     streamEnabled: form.streamEnabled,
     thinkingEnabled: form.thinkingEnabled,
     capabilities,
@@ -888,6 +902,13 @@ defineExpose({ open });
 }
 .cache-alert {
   margin: 16px 0;
+}
+.field-tip {
+  display: block;
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 .advanced-collapse {
   margin-top: 18px;

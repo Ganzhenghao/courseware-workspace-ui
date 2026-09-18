@@ -18,6 +18,9 @@
         <span>{{ row.providerName || '--' }}</span>
         <el-tag v-if="!row.providerEnabled" type="warning" size="small">提供商停用</el-tag>
       </template>
+      <template #httpProtocol="{ row }">
+        <el-tag effect="plain">{{ httpProtocolLabel(row.httpProtocol) }}</el-tag>
+      </template>
       <template #capabilities="{ row }">
         <el-tag v-for="capability in row.capabilities" :key="capability" size="small" effect="plain">
           {{ capabilityName(capability) }}
@@ -54,6 +57,7 @@ import type { ColumnProps, EnumProps, ProTableInstance, SearchProps } from '@/co
 import ModelDialog from './components/ModelDialog.vue';
 import ModelTestDialog from './components/ModelTestDialog.vue';
 import { getAiProviderOptionsApi } from '@/modules/ai/api/provider';
+import type { AiHttpProtocol } from '@/modules/ai/types/provider';
 import { changeAiModelStatusApi, deleteAiModelApi, getAiModelByIdApi, getAiModelPageApi } from '@/modules/ai/api/model';
 import type { AiModel, AiModelCapability } from '@/modules/ai/types/model';
 
@@ -84,6 +88,7 @@ const columns: ColumnProps<AiModel>[] = [
   { prop: 'remoteModelName', label: '远端模型名', minWidth: 180, showOverflowTooltip: true },
   { prop: 'capabilities', label: '能力', minWidth: 230 },
   { prop: 'contextWindow', label: '上下文窗口', width: 115 },
+  { prop: 'httpProtocol', label: '协议', width: 100 },
   { prop: 'enabled', label: '运行状态', width: 120 },
   { prop: 'updateTime', label: '更新时间', width: 180 },
   { prop: 'operation', label: '操作', width: 280, fixed: 'right' }
@@ -96,6 +101,8 @@ const capabilityLabels: Record<AiModelCapability, string> = {
   THINKING: '思考'
 };
 const capabilityName = (value: AiModelCapability) => capabilityLabels[value];
+const httpProtocolLabel = (value?: AiHttpProtocol | null) =>
+  value === 'HTTP_1_1' ? 'HTTP/1.1' : value === 'HTTP_2' ? 'HTTP/2' : '继承';
 const getTableList = (params: Record<string, unknown>) => getAiModelPageApi(params);
 const refresh = () => tableRef.value?.getTableList();
 const openCreate = () => dialogRef.value?.open();

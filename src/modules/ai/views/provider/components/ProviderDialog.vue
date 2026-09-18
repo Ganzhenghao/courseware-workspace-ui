@@ -30,9 +30,21 @@
         <el-input v-model="form.baseUrl" :placeholder="currentAdapter?.defaultBaseUrl || 'https://example.com/v1'" />
         <span class="field-tip">留空使用适配器默认地址；允许受控内网 HTTP/HTTPS 地址。</span>
       </el-form-item>
-      <el-form-item label="Endpoint Path">
-        <el-input v-model="form.endpointPath" placeholder="可选，例如 /chat/completions" />
-      </el-form-item>
+      <el-row :gutter="16">
+        <el-col :span="12">
+          <el-form-item label="Endpoint Path">
+            <el-input v-model="form.endpointPath" placeholder="可选，例如 /chat/completions" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="HTTP 协议">
+            <el-select v-model="form.httpProtocol" clearable placeholder="默认（跟随框架）">
+              <el-option v-for="item in httpProtocolOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <span class="field-tip">留空走后端默认协议；明文 HTTP 地址对接 vLLM 等服务建议选 HTTP/1.1。</span>
+          </el-form-item>
+        </el-col>
+      </el-row>
       <el-form-item label="凭证" prop="credential">
         <el-input
           v-model="form.credential"
@@ -94,7 +106,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { createAiProviderApi, getAiAdapterOptionsApi, updateAiProviderApi } from '@/modules/ai/api/provider';
 import { useDialogWidth } from '@/hooks/useDialogWidth';
 import JsonEditor from '@/components/JsonEditor/index.vue';
-import type { AiAdapterOption, AiAdapterType, AiProvider } from '@/modules/ai/types/provider';
+import type { AiAdapterOption, AiAdapterType, AiHttpProtocol, AiProvider } from '@/modules/ai/types/provider';
 
 type ProviderForm = {
   id?: number;
@@ -103,6 +115,7 @@ type ProviderForm = {
   adapterType?: AiAdapterType;
   baseUrl: string;
   endpointPath: string;
+  httpProtocol?: AiHttpProtocol;
   credential: string;
   clearCredential: boolean;
   headersJson: string;
@@ -118,6 +131,10 @@ const editing = ref(false);
 const credentialConfigured = ref(false);
 const credentialHint = ref('');
 const adapterOptions = ref<AiAdapterOption[]>([]);
+const httpProtocolOptions: { label: string; value: AiHttpProtocol }[] = [
+  { label: 'HTTP/1.1', value: 'HTTP_1_1' },
+  { label: 'HTTP/2', value: 'HTTP_2' }
+];
 const formRef = ref<FormInstance>();
 const dialogWidth = useDialogWidth('780px');
 const emit = defineEmits<{ saved: [] }>();
@@ -126,6 +143,7 @@ const form = reactive<ProviderForm>({
   providerCode: '',
   baseUrl: '',
   endpointPath: '',
+  httpProtocol: undefined,
   credential: '',
   clearCredential: false,
   headersJson: '{}',
@@ -184,6 +202,7 @@ const open = async (provider?: AiProvider) => {
     adapterType: provider?.adapterType,
     baseUrl: provider?.baseUrl || '',
     endpointPath: provider?.endpointPath || '',
+    httpProtocol: provider?.httpProtocol ?? undefined,
     credential: '',
     clearCredential: false,
     headersJson: JSON.stringify(provider?.connectionConfig?.additionalHeaders || {}, null, 2),
@@ -203,6 +222,7 @@ const submit = async () => {
     providerName: form.providerName.trim(),
     baseUrl: form.baseUrl.trim() || null,
     endpointPath: form.endpointPath.trim() || null,
+    httpProtocol: form.httpProtocol ?? null,
     credential: form.credential.trim() || null,
     connectionConfig: {
       additionalHeaders: JSON.parse(form.headersJson || '{}') as Record<string, string>,

@@ -11,6 +11,9 @@
       <template #adapterType="{ row }"
         ><el-tag effect="plain">{{ adapterName(row.adapterType) }}</el-tag></template
       >
+      <template #httpProtocol="{ row }">
+        <el-tag effect="plain">{{ httpProtocolLabel(row.httpProtocol) }}</el-tag>
+      </template>
       <template #credentialConfigured="{ row }">
         <el-tag :type="row.credentialConfigured ? 'success' : 'warning'">
           {{ row.credentialConfigured ? `已配置 ${row.credentialHint || ''}` : '未配置' }}
@@ -47,7 +50,7 @@ import {
   getAiProviderByIdApi,
   getAiProviderPageApi
 } from '@/modules/ai/api/provider';
-import type { AiAdapterType, AiProvider } from '@/modules/ai/types/provider';
+import type { AiAdapterType, AiHttpProtocol, AiProvider } from '@/modules/ai/types/provider';
 
 defineOptions({ name: 'AiProviderView' });
 
@@ -78,12 +81,15 @@ const columns: ColumnProps<AiProvider>[] = [
   { prop: 'providerCode', label: '编码', minWidth: 130 },
   { prop: 'adapterType', label: '适配器', width: 110 },
   { prop: 'effectiveBaseUrl', label: '有效 Base URL', minWidth: 250, showOverflowTooltip: true },
+  { prop: 'httpProtocol', label: '协议', width: 100 },
   { prop: 'credentialConfigured', label: '凭证', width: 150 },
   { prop: 'enabled', label: '状态', width: 80 },
   { prop: 'updateTime', label: '更新时间', width: 180 },
   { prop: 'operation', label: '操作', width: 220, fixed: 'right' }
 ];
 const adapterName = (value: AiAdapterType) => adapterOptions.find(item => item.value === value)?.label || value;
+const httpProtocolLabel = (value?: AiHttpProtocol | null) =>
+  value === 'HTTP_1_1' ? 'HTTP/1.1' : value === 'HTTP_2' ? 'HTTP/2' : '默认';
 const getTableList = (params: Record<string, unknown>) => getAiProviderPageApi(params);
 const refresh = () => tableRef.value?.getTableList();
 const openCreate = () => dialogRef.value?.open();
