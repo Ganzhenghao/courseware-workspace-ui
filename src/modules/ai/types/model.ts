@@ -64,6 +64,18 @@ export type AiModelPayload = {
   remark?: string | null;
 };
 export type AiModelUpdate = Omit<AiModelPayload, 'modelCode'> & { id: number };
+export type AiModelOption = {
+  id: number;
+  providerId: number;
+  /** 提供商记录缺失时后端返回 null */
+  providerCode: string | null;
+  providerName: string | null;
+  modelCode: string;
+  displayName: string;
+  enabled: boolean;
+  /** 模型启用且所属提供商启用 */
+  available: boolean;
+};
 export type AiModelTestResult = {
   elapsedMillis: number;
   responseText?: string | null;

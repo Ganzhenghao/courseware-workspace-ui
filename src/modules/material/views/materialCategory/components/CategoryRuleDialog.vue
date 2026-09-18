@@ -58,8 +58,34 @@
       </el-form-item>
 
       <el-form-item label="AI 分析">
-        <el-switch v-model="form.aiAnalysisEnabled" inline-prompt active-text="开" inactive-text="关" />
-        <span class="field-tip">仅保存开关，本期不触发 AI 分析任务</span>
+        <el-switch
+          v-model="form.aiAnalysisEnabled"
+          inline-prompt
+          active-text="开"
+          inactive-text="关"
+          @change="handleAiAnalysisChange"
+        />
+        <span class="field-tip">仅保存开关与模型绑定，本期不触发 AI 分析任务</span>
+      </el-form-item>
+
+      <el-form-item label="分析模型" prop="aiProviderCode">
+        <el-select
+          v-model="selectedModelKey"
+          class="model-select"
+          filterable
+          clearable
+          :loading="modelLoading"
+          placeholder="选择 AI 分析模型"
+          @visible-change="handleModelSelectVisible"
+        >
+          <el-option-group v-for="group in modelOptionGroups" :key="group.label" :label="group.label">
+            <el-option v-for="item in group.options" :key="item.key" :label="item.label" :value="item.key" />
+          </el-option-group>
+        </el-select>
+        <div class="field-tip block-tip">
+          <span>{{ modelTip }}</span>
+          <el-button v-if="modelLoadFailed" type="primary" link @click="loadModelOptions">重新加载</el-button>
+        </div>
       </el-form-item>
 
       <el-form-item label="排序" prop="sort">
@@ -88,8 +114,10 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
+import { getAiModelOptionsApi } from '@/modules/ai/api/model';
 import { updateMaterialCategoryApi } from '@/modules/material/api/materialCategory';
 import { useDialogWidth } from '@/hooks/useDialogWidth';
+import type { AiModelOption } from '@/modules/ai/types/model';
 import type {
   ImageDimensionMode,
   MaterialCategory,
@@ -98,6 +126,15 @@ import type {
 } from '@/modules/material/types/materialCategory';
 
 type SizeUnit = 'KB' | 'MB' | 'GB';
+
+type ModelSelectOption = {
+  key: string;
+  label: string;
+  group: string;
+  providerCode: string;
+  modelCode: string;
+  available: boolean;
+};
 
 type EditFormModel = {
   code: MaterialCategoryCode;
@@ -109,6 +146,8 @@ type EditFormModel = {
   imageHeight: number | null;
   maxDurationSeconds: number | null;
   aiAnalysisEnabled: boolean;
+  aiProviderCode: string | null;
+  aiModelCode: string | null;
   sort: number;
   remark: string;
 };
@@ -137,6 +176,8 @@ const form = reactive<EditFormModel>({
   imageHeight: null,
   maxDurationSeconds: null,
   aiAnalysisEnabled: false,
+  aiProviderCode: null,
+  aiModelCode: null,
   sort: 10,
   remark: ''
 });
@@ -146,6 +187,18 @@ const rules: FormRules<EditFormModel> = {
   maxSizeValue: [{ required: true, message: '请填写文件大小上限', trigger: 'blur' }],
   imageDimensionMode: [{ required: true, message: '请选择图片尺寸规则', trigger: 'change' }],
   maxDurationSeconds: [{ required: true, message: '请填写最大时长', trigger: 'blur' }],
+  aiProviderCode: [
+    {
+      validator: (_rule, _value, callback) => {
+        if (form.aiAnalysisEnabled && !(form.aiProviderCode && form.aiModelCode)) {
+          callback(new Error('启用 AI 分析时必须选择分析模型'));
+          return;
+        }
+        callback();
+      },
+      trigger: 'change'
+    }
+  ],
   sort: [{ required: true, message: '请填写排序值', trigger: 'blur' }]
 };
 
@@ -176,6 +229,135 @@ const getSizeInput = (bytes: number): { value: number; unit: SizeUnit } => {
   return { value: Number((bytes / SIZE_UNIT_BYTES[unit]).toFixed(precision)), unit };
 };
 
+const MODEL_KEY_SEPARATOR = '::';
+const buildModelKey = (providerCode: string, modelCode: string) => `${providerCode}${MODEL_KEY_SEPARATOR}${modelCode}`;
+
+const formatModelLabel = (displayName: string | null | undefined, modelCode: string) => {
+  const name = displayName?.trim();
+  return name && name !== modelCode ? `${name}（${modelCode}）` : modelCode;
+};
+
+// 提供商记录缺失的模型没有可绑定的 providerCode，无法作为类别分析模型选项
+const toModelSelectOption = (item: AiModelOption, status?: string): ModelSelectOption | null => {
+  if (!item.providerCode) return null;
+  const label = formatModelLabel(item.displayName, item.modelCode);
+  return {
+    key: buildModelKey(item.providerCode, item.modelCode),
+    label: status ? `${label} · ${status}` : label,
+    group: item.providerName?.trim() || item.providerCode,
+    providerCode: item.providerCode,
+    modelCode: item.modelCode,
+    available: item.available
+  };
+};
+
+const modelOptions = ref<ModelSelectOption[]>([]);
+const modelLoading = ref(false);
+const modelLoaded = ref(false);
+const modelLoadFailed = ref(false);
+const boundModelNames = ref<{ providerName: string | null; modelName: string | null }>({
+  providerName: null,
+  modelName: null
+});
+
+const loadModelOptions = async () => {
+  if (modelLoading.value || modelLoaded.value) return;
+  modelLoading.value = true;
+  modelLoadFailed.value = false;
+  try {
+    const response = await getAiModelOptionsApi();
+    modelOptions.value = response.data
+      .map(item => toModelSelectOption(item))
+      .filter((item): item is ModelSelectOption => item !== null);
+    modelLoaded.value = true;
+  } catch {
+    // 请求层已提示业务错误，此处仅标记失败并在表单内提供重试入口
+    modelLoadFailed.value = true;
+  } finally {
+    modelLoading.value = false;
+  }
+};
+
+const boundModelKey = computed(() =>
+  form.aiProviderCode && form.aiModelCode ? buildModelKey(form.aiProviderCode, form.aiModelCode) : null
+);
+
+const matchedBoundModel = computed(() =>
+  boundModelKey.value ? modelOptions.value.find(item => item.key === boundModelKey.value) : undefined
+);
+
+// 已绑定项不在选项列表中时用它兜底展示，避免打开弹窗后选择被静默清空
+const boundModelFallback = computed<ModelSelectOption | null>(() => {
+  const providerCode = form.aiProviderCode;
+  const modelCode = form.aiModelCode;
+  if (!providerCode || !modelCode) return null;
+  const status = modelLoaded.value ? '已失效，请重新选择' : undefined;
+  const label = formatModelLabel(boundModelNames.value.modelName, modelCode);
+  return {
+    key: buildModelKey(providerCode, modelCode),
+    label: status ? `${label} · ${status}` : label,
+    group: boundModelNames.value.providerName?.trim() || providerCode,
+    providerCode,
+    modelCode,
+    available: false
+  };
+});
+
+const selectableModelOptions = computed<ModelSelectOption[]>(() => {
+  const available = modelOptions.value.filter(item => item.available);
+  const boundKey = boundModelKey.value;
+  if (!boundKey || available.some(item => item.key === boundKey)) return available;
+  const matched = matchedBoundModel.value;
+  if (matched) return [...available, { ...matched, label: `${matched.label} · 已停用` }];
+  const fallback = boundModelFallback.value;
+  return fallback ? [...available, fallback] : available;
+});
+
+const modelOptionGroups = computed(() => {
+  const groups = new Map<string, ModelSelectOption[]>();
+  for (const item of selectableModelOptions.value) {
+    const group = groups.get(item.group);
+    if (group) group.push(item);
+    else groups.set(item.group, [item]);
+  }
+  return [...groups].map(([label, options]) => ({ label, options }));
+});
+
+const modelOptionMap = computed(() => new Map(selectableModelOptions.value.map(item => [item.key, item])));
+
+const selectedModelKey = computed<string | null>({
+  get: () => boundModelKey.value,
+  set: key => {
+    if (!key) {
+      form.aiProviderCode = null;
+      form.aiModelCode = null;
+      return;
+    }
+    const option = modelOptionMap.value.get(key);
+    if (!option) return;
+    form.aiProviderCode = option.providerCode;
+    form.aiModelCode = option.modelCode;
+  }
+});
+
+const modelTip = computed(() => {
+  if (modelLoading.value) return '正在加载 AI 模型选项…';
+  if (modelLoadFailed.value) return '模型选项加载失败，请确认已获得「AI 管理 → 模型管理 → 查询」权限后重试。';
+  if (form.aiAnalysisEnabled && !boundModelKey.value) return '启用 AI 分析时必须选择模型，且仅能选择可用（模型与提供商均已启用）的模型。';
+  if (modelLoaded.value && boundModelKey.value && !matchedBoundModel.value) return '当前绑定的分析模型已不存在，请重新选择后再保存。';
+  if (matchedBoundModel.value && !matchedBoundModel.value.available) return '当前绑定的模型或其提供商已停用，可继续保存或改选其他模型。';
+  return '仅能选择可用（模型与提供商均已启用）的模型；关闭开关不会解除引用，清除选择后该模型才允许删除。';
+});
+
+const handleAiAnalysisChange = async (value: boolean) => {
+  if (value && !modelLoaded.value) await loadModelOptions();
+  formRef.value?.validateField('aiProviderCode').catch(() => {});
+};
+
+const handleModelSelectVisible = (visible: boolean) => {
+  if (visible && !modelLoaded.value) void loadModelOptions();
+};
+
 const open = async (row: MaterialCategory) => {
   category.value = row;
   const sizeInput = getSizeInput(row.maxSizeBytes);
@@ -189,9 +371,14 @@ const open = async (row: MaterialCategory) => {
     imageHeight: row.imageHeight,
     maxDurationSeconds: row.maxDurationSeconds,
     aiAnalysisEnabled: row.aiAnalysisEnabled,
+    aiProviderCode: row.aiProviderCode ?? null,
+    aiModelCode: row.aiModelCode ?? null,
     sort: row.sort,
     remark: row.remark || ''
   });
+  boundModelNames.value = { providerName: row.aiProviderName, modelName: row.aiModelName };
+  // 仅在需要展示已绑定模型或启用开关时加载，避免无权限的操作者每次打开都触发失败请求
+  if (row.aiAnalysisEnabled || row.aiProviderCode) await loadModelOptions();
   visible.value = true;
   await nextTick();
   formRef.value?.clearValidate();
@@ -211,6 +398,10 @@ const validateConditionalFields = () => {
     ElMessage.warning('音视频最大时长必须为正整数');
     return false;
   }
+  if (modelLoaded.value && boundModelKey.value && !matchedBoundModel.value) {
+    ElMessage.warning('当前绑定的分析模型已不存在，请重新选择');
+    return false;
+  }
   return true;
 };
 
@@ -228,6 +419,8 @@ const handleSubmit = async () => {
     imageHeight: isImage && form.imageDimensionMode === 'FIXED' ? form.imageHeight : null,
     maxDurationSeconds: isMedia.value ? form.maxDurationSeconds : null,
     aiAnalysisEnabled: form.aiAnalysisEnabled,
+    aiProviderCode: form.aiProviderCode,
+    aiModelCode: form.aiModelCode,
     sort: form.sort,
     remark: form.remark.trim() || null
   };
@@ -296,6 +489,10 @@ defineExpose({ open });
 
 .size-unit {
   width: 92px;
+}
+
+.model-select {
+  width: 100%;
 }
 
 .dimension-inputs {
